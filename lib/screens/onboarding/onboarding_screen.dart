@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../home/home_screen.dart';
+import '../dashboard/dashboard_screen.dart';
+import '../../services/user_service.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -10,6 +11,7 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   int currentStep = 0;
+  bool isLoading = false;
 
   // Controllers
   final TextEditingController fullNameController = TextEditingController();
@@ -61,14 +63,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     "Explore Ideas",
   ];
 
-  void nextStep() {
+  Future<void> nextStep() async {
     // Step Validation
     if (currentStep == 0) {
       if (fullNameController.text.trim().isEmpty) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("Enter full name")));
-
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Enter full name")));
+        return;
+      }
+      if (bioController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Enter a short bio")));
         return;
       }
     }
@@ -78,7 +81,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Select at least one interest")),
         );
-
         return;
       }
     }
@@ -88,29 +90,63 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Select at least one skill")),
         );
-
         return;
+      }
+    }
+
+    if (currentStep == 3) {
+      if (hasExperience) {
+        if (projectNameController.text.trim().isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Enter project name")));
+          return;
+        }
+        if (experienceDescriptionController.text.trim().isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Enter project description")));
+          return;
+        }
       }
     }
 
     if (currentStep == 4) {
       if (selectedGoal.isEmpty) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("Select your goal")));
-
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Select your goal")));
         return;
       }
 
       // Final Submit
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Onboarding Completed")));
+      setState(() {
+        isLoading = true;
+      });
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
+      try {
+        await UserService().submitOnboarding(
+          bio: bioController.text.trim(),
+          interests: selectedInterests,
+          skills: selectedSkills,
+          hasExperience: hasExperience,
+          projectName: hasExperience ? projectNameController.text.trim() : null,
+          experienceDescription: hasExperience ? experienceDescriptionController.text.trim() : null,
+          goal: selectedGoal,
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Onboarding Completed")));
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const DashboardScreen()),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))));
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            isLoading = false;
+          });
+        }
+      }
 
       return;
     }
@@ -148,12 +184,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               height: 55,
 
               child: ElevatedButton(
-                onPressed: nextStep,
-
-                child: Text(
-                  currentStep == 4 ? "Finish" : "Continue",
-                  style: const TextStyle(fontSize: 18),
-                ),
+                onPressed: isLoading ? null : nextStep,
+                child: isLoading
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : Text(
+                        currentStep == 4 ? "Finish" : "Continue",
+                        style: const TextStyle(fontSize: 18),
+                      ),
               ),
             ),
 
